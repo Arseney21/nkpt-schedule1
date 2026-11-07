@@ -35,20 +35,26 @@ BASES = [
 # Страницы со списком групп. bg.htm — основной список; cg.htm — запасной.
 GROUP_LIST_PAGES = [("bg.htm", "bg"), ("cg.htm", "cg")]
 
-# Время пар скрапер при КАЖДОМ запуске пытается найти на самом сайте колледжа
-# (см. discover_bells). Если на сайте времени нет — используется запасная таблица ниже.
-# ⚠ Запасная таблица — приблизительная, поправьте её под ваш колледж.
+# Расписание звонков колледжа (на сайте с расписанием времени пар нет — берём с листа звонков).
+# Пара целиком = от начала первой половины до конца второй (между половинами перерыв 5 минут).
+# Понедельник — пятница:
 BELLS = {
-    "1": "08:30-10:00",
-    "2": "10:10-11:40",
-    "3": "12:10-13:40",
-    "4": "13:50-15:20",
-    "5": "15:30-17:00",
-    "6": "17:10-18:40",
+    "1": "08:30-10:05",
+    "2": "10:25-12:00",
+    "3": "12:30-14:05",
+    "4": "14:15-15:45",
+    "5": "15:55-17:25",
+    "6": "17:35-19:05",
 }
-
-# Страницы сайта, где ищем время пар (hgNN.htm добавляется автоматически)
-BELLS_PAGES = ["hg.htm", "index.htm", "cg.htm"]
+# Суббота:
+BELLS_SAT = {
+    "1": "08:30-10:05",
+    "2": "10:15-11:50",
+    "3": "12:10-13:45",
+    "4": "13:55-15:25",
+    "5": "15:35-17:05",
+    "6": "17:15-18:45",
+}
 
 OUT_FILE = Path(__file__).resolve().parent / "docs" / "schedule.json"
 USER_AGENT = "Mozilla/5.0 (compatible; ScheduleBot/1.0; +github-actions)"
@@ -208,61 +214,6 @@ def get_groups():
 
 
 # --------------------------------------------------------------------------
-# Время пар: ищем на сайте при каждом запуске
-# --------------------------------------------------------------------------
-
-BELL_RE = re.compile(
-    r"(?<![\d.:])(\d)\s*(?:-?я\s*)?(?:пара|пар\.|п\.)?\s*[:)\-–—.]?\s*"
-    r"(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})",
-    re.I,
-)
-
-
-def extract_bells(html):
-    """Ищет в тексте страницы пары вида «1 08:30-10:00». Возвращает {"1": "08:30-10:00", ...}."""
-    parts = []
-    for tok in tokenize(html):
-        parts.append(tok[1] if tok[0] == "text" else tok[2])
-    text = " ".join(parts)
-
-    found = {}
-    for m in BELL_RE.finditer(text):
-        n = int(m.group(1))
-        h1, m1, h2, m2 = int(m.group(2)), m.group(3), int(m.group(4)), m.group(5)
-        if not (1 <= n <= 9 and h1 < 24 and h2 < 24):
-            continue
-        if (h1, int(m1)) >= (h2, int(m2)):
-            continue
-        found.setdefault(str(n), "%02d:%s-%02d:%s" % (h1, m1, h2, m2))
-
-    # Здравый смысл: минимум 2 пары, время растёт вместе с номером
-    ordered = sorted(found.items(), key=lambda kv: int(kv[0]))
-    if len(ordered) < 2:
-        return {}
-    starts = [kv[1][:5] for kv in ordered]
-    if starts != sorted(starts):
-        return {}
-    return dict(ordered)
-
-
-def discover_bells(groups):
-    pages = list(BELLS_PAGES)
-    if groups:
-        pages.insert(1, "hg%s.htm" % groups[0][0])
-    for page in pages:
-        try:
-            bells = extract_bells(fetch(page))
-        except Exception as exc:  # noqa: BLE001
-            log("  звонки: %s недоступна (%s)" % (page, exc))
-            continue
-        if bells:
-            log("Время пар найдено на сайте (%s): %s" % (page, bells))
-            return bells, "site"
-    log("::warning::Время пар на сайте не найдено — используется запасная таблица BELLS")
-    return dict(BELLS), "default"
-
-
-# --------------------------------------------------------------------------
 # Страница расписания группы
 # --------------------------------------------------------------------------
 
@@ -314,14 +265,18 @@ def add_unique(current, value):
     return current + ", " + value
 
 
-def parse_schedule(html, bells=None):
+def bells_for(iso):
+    """Звонки для даты: суббота — свои, остальные дни — обычные."""
+    return BELLS_SAT if dt.date.fromisoformat(iso).weekday() == 5 else BELLS
+
+
+def parse_schedule(html):
     """
     Разбирает страницу cgNN.htm по потоку токенов:
       дата (26.10.2026) -> день недели (Пн-1) -> номер пары (1..9)
       -> ссылки: предмет (j…), аудитория (ca…), преподаватель (cp…).
     Возвращает список дней.
     """
-    bells = bells or BELLS
     tokens = tokenize(html)
 
     days = []
@@ -460,7 +415,7 @@ def parse_schedule(html, bells=None):
                 continue
             pair["lessons"] = lessons
             if not pair["time"]:
-                pair["time"] = bells.get(str(pair["n"]), "")
+                pair["time"] = bells_for(day["iso"]).get(str(pair["n"]), "")
             pairs.append(pair)
         pairs.sort(key=lambda p: p["n"])
         day["pairs"] = pairs
@@ -489,8 +444,6 @@ def main():
         log("::warning::Список групп получить не удалось — schedule.json не изменён")
         return 0
 
-    bells, bells_source = discover_bells(groups)
-
     old = load_old()
     old_schedules = old.get("schedules", {}) if isinstance(old.get("schedules"), dict) else {}
 
@@ -505,7 +458,7 @@ def main():
         group_names.append(name)
 
         try:
-            days = parse_schedule(fetch("cg%s.htm" % gid), bells)
+            days = parse_schedule(fetch("cg%s.htm" % gid))
             if not days:
                 raise ValueError("на странице не найдено ни одного дня")
             schedules[name] = {"id": gid, "days": days}
@@ -533,8 +486,9 @@ def main():
         "updated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "groups": group_names,
         "schedules": schedules,
-        "bells": bells,
-        "bells_source": bells_source,
+        "bells": BELLS,
+        "bells_sat": BELLS_SAT,
+        "bells_source": "college",
     }
 
     # Если ничего не изменилось — файл не трогаем (меньше лишних коммитов)
