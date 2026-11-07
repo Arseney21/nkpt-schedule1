@@ -263,7 +263,8 @@
 
   /* Время пары → { start, end, from, to } или null */
   function pairTimes(iso, pair) {
-    var bells = state.data && state.data.bells;
+    var d0 = fromISO(iso);
+    var bells = state.data && (d0.getDay() === 6 ? (state.data.bells_sat || state.data.bells) : state.data.bells);
     var t = pair.time || (bells && bells[String(pair.n)]) || '';
     var m = /(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})/.exec(t);
     if (!m) return null;
