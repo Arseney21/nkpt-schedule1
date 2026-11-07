@@ -129,8 +129,11 @@
   .state p { margin: 0 auto 18px; max-width: 34ch; }
   .retry { padding: 11px 22px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
   :root[data-theme="dark"] .retry { color: #0b1019; }
-  footer { padding: 4px 14px 24px; text-align: center; color: var(--muted); font-size: 12.5px; }
+  footer { padding: 4px 14px 6px; text-align: center; color: var(--muted); font-size: 12.5px; }
   footer div + div { margin-top: 2px; }
+  .credit { padding: 0 14px 22px; text-align: center; font-size: 12px; }
+  .credit a { color: var(--muted); text-decoration: none; opacity: .75; }
+  .credit a:hover, .credit a:focus-visible { opacity: 1; text-decoration: underline; }
 
   /* ---------- Нижняя шторка выбора группы ---------- */
   .overlay { position: fixed; inset: 0; z-index: 10; background: rgba(5, 10, 20, .55); opacity: 0; pointer-events: none; transition: opacity .2s; }
@@ -182,6 +185,7 @@
   <div id="list" aria-live="polite"></div>
 </main>
 <footer id="footer"></footer>
+<div class="credit"><a id="credit" href="https://t.me/lxx776" target="_blank" rel="noopener">Разработчик расписания · @lxx776</a></div>
 
 <div class="overlay" id="overlay"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Выбор группы">
@@ -728,6 +732,14 @@
     state.weekOffset = 0;
     lsSet(LS_VIEW, state.view);
     render();
+  });
+
+  var $credit = document.getElementById('credit');
+  $credit.addEventListener('click', function (e) {
+    if (tg && tg.openTelegramLink) {
+      e.preventDefault();
+      try { tg.openTelegramLink('https://t.me/lxx776'); } catch (err) { window.open('https://t.me/lxx776', '_blank'); }
+    }
   });
 
   load();
