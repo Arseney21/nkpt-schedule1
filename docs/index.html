@@ -93,20 +93,14 @@
 
   /* ---------- Дни и пары ---------- */
   .day { margin: 0 0 16px; }
-  .day-head { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 2px 4px 8px; border: 0; background: none; text-align: left; cursor: default; }
+  .day-head { display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 8px; }
   .day-name { font-size: 18px; font-weight: 750; letter-spacing: -.01em; }
   .day-date { color: var(--muted); font-size: 14px; }
   .badge { margin-left: auto; padding: 2px 10px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 700; }
   :root[data-theme="dark"] .badge { color: #0b1019; }
   .day.today .day-name { color: var(--accent); }
-  .day-sum { margin-left: auto; color: var(--muted); font-size: 13.5px; }
-  .day-chev { width: 16px; height: 16px; align-self: center; color: var(--muted); transition: transform .2s; }
-
-  .day.past .day-head { cursor: pointer; }
   .day.past .day-name { color: var(--muted); }
-  .day.past.collapsed .pairs, .day.past.collapsed .no-pairs-box { display: none; }
-  .day.past.collapsed { margin-bottom: 6px; }
-  .day.past:not(.collapsed) .day-chev { transform: rotate(180deg); }
+  .day.past .pairs { opacity: .72; }
 
   .pairs, .no-pairs-box { overflow: hidden; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
   .no-pairs-box { padding: 12px 16px; color: var(--muted); font-size: 14.5px; box-shadow: none; background: transparent; border-style: dashed; }
@@ -163,7 +157,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .dot { animation: none; }
-    .overlay, .sheet, .sheet.open, .day-chev { transition: none; }
+    .overlay, .sheet, .sheet.open { transition: none; }
   }
 </style>
 </head>
@@ -573,28 +567,6 @@
     return out;
   }
 
-  function chevron() {
-    var ns = 'http://www.w3.org/2000/svg';
-    var svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('viewBox', '0 0 20 20');
-    svg.setAttribute('class', 'day-chev');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    var path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', 'M5 8l5 5 5-5');
-    svg.appendChild(path);
-    return svg;
-  }
-  function pairsWord(n) {
-    var m10 = n % 10, m100 = n % 100;
-    if (m10 === 1 && m100 !== 11) return n + ' пара';
-    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return n + ' пары';
-    return n + ' пар';
-  }
-
   function renderDays(days) {
     var picked = pickDays(days);
     if (picked.notice) $list.appendChild(el('p', 'notice', picked.notice));
@@ -604,23 +576,12 @@
       var isToday = day.iso === picked.todayISO;
       var isPast = day.iso < picked.todayISO;
       var pairs = Array.isArray(day.pairs) ? day.pairs : [];
-      var collapsible = isPast && state.view === 'week';
 
-      var sec = el('section', 'day' + (isToday ? ' today' : '') + (collapsible ? ' past collapsed' : ''));
-      var head = el('button', 'day-head');
-      head.type = 'button';
+      var sec = el('section', 'day' + (isToday ? ' today' : '') + (isPast ? ' past' : ''));
+      var head = el('div', 'day-head');
       head.appendChild(el('span', 'day-name', DAY_FULL[d.getDay()]));
       head.appendChild(el('span', 'day-date', fmtDate(d)));
       if (isToday) head.appendChild(el('span', 'badge', 'Сегодня'));
-      if (collapsible) {
-        head.appendChild(el('span', 'day-sum', pairs.length ? pairsWord(pairs.length) : 'нет занятий'));
-        head.appendChild(chevron());
-        head.setAttribute('aria-expanded', 'false');
-        head.addEventListener('click', function () {
-          var collapsed = sec.classList.toggle('collapsed');
-          head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-        });
-      }
       sec.appendChild(head);
 
       if (!pairs.length) {
